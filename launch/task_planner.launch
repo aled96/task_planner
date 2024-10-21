@@ -1,0 +1,6 @@
+<?xml version="1.0" ?>
+<launch>
+
+    <node pkg="task_planner" name="TaskPlannerNode" type="TaskPlannerNode.py" output="screen" args="1"/>
+
+</launch>
