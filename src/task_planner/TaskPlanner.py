@@ -9,8 +9,8 @@ class TaskPlanner:
         self.setActions()
         self.setProblem()
         self.addObjects()
-        self.setInitState()
-        self.setGoalState()
+        #self.setInitState()
+        #self.setGoalState()
 
     def setTypes(self):
         #Types
@@ -115,7 +115,7 @@ class TaskPlanner:
                 
     def setProblem(self):
         self.problem = Problem('Problem')
-
+        
         for f in self.fluents:
             self.problem.add_fluent(self.fluents[f], default_initial_value=False)
 
@@ -137,9 +137,19 @@ class TaskPlanner:
      
         self.problem.add_objects(Objects)
 
-    def setInitState(self):
+    def ResetInitState(self):
+        for fluent in self.problem.initial_values:
+            # Reset each fluent to False (assuming it's a Boolean fluent)
+            self.problem.set_initial_value(fluent, False)
+            
+    def setInitState(self, input_state=[]):
 
-        init_state = rospy.get_param("/task_planner/init_state")
+        self.ResetInitState()
+
+        if(len(input_state) == 0):
+            init_state = rospy.get_param("/task_planner/init_state")
+        else:
+            init_state = input_state
 
         for s in init_state:
             #Deal with Not
@@ -164,8 +174,14 @@ class TaskPlanner:
             
             self.problem.set_initial_value(self.fluents[elements[0]](*args), val)
             
-    def setGoalState(self):
-        goal_state = rospy.get_param("/task_planner/goal_state")
+    def setGoalState(self, input_state=[]):
+        
+        self.problem.clear_goals()
+
+        if(len(input_state) == 0):
+            goal_state = rospy.get_param("/task_planner/goal_state")
+        else:
+            goal_state = input_state
 
         for s in goal_state:
             #Deal with Not
@@ -194,6 +210,7 @@ class TaskPlanner:
                 self.problem.add_goal(self.fluents[elements[0]](*args))
 
     def solve(self):
+        
         with OneshotPlanner(problem_kind=self.problem.kind) as planner:
             result = planner.solve(self.problem)
             print("%s returned: %s" % (planner.name, result.plan))

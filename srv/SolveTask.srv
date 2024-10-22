@@ -1,3 +1,4 @@
-uint8 task
+string[] init_state
+string[] goal_state
 ---
-uint8[] solution
+string[] solution
