@@ -1,6 +1,8 @@
 <?xml version="1.0" ?>
 <launch>
 
+    <rosparam file="$(find task_planner)/config/task_planner_params.yaml" command="load"/>
+
     <node pkg="task_planner" name="TaskPlannerNode" type="TaskPlannerNode.py" output="screen" args="1"/>
 
 </launch>

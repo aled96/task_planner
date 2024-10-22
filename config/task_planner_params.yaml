@@ -1,0 +1,81 @@
+task_planner:
+
+  #Types father in parenthesis
+  types: 
+    names: [Robot, Obj, Tool(Obj)]
+
+  objects:
+    Robot: [Centauro]
+    Obj: [Screw, Valve, Nail]
+    Tool: [Screwdriver, Hammer]
+
+  fluents:
+    names: [grasped, is_tight, requires_tool, is_turnable, free_hands, can_tight]
+
+    grasped:
+      type: BoolType
+      params: [Robot, Obj]
+    is_tight:
+      type: BoolType
+      params: [Obj]
+    requires_tool:
+      type: BoolType
+      params: [Obj, Tool]
+    is_turnable:
+      type: BoolType
+      params: [Obj]
+    free_hands:
+      type: BoolType
+      params: [Robot]
+    can_tight:
+      type: BoolType
+      params: [Obj]
+  
+  #Actions --> indices in precond and effect are related to the action's params
+  # " " needed in preconditions and effect
+  # No spaces
+  actions:
+    names: [grasp, put_down, tight, turn]
+
+    grasp:
+      params: [Robot, Obj]
+      preconditions: ["free_hands(0)", 
+                      "~grasped(0,1)"]
+      effect: ["grasped(0,1)",
+               "~free_hands(0)"]
+
+    put_down:
+      params: [Robot, Obj]
+      preconditions: ["~free_hands(0)", 
+                      "grasped(0,1)"]
+      effect: ["~grasped(0,1)",
+               "free_hands(0)"]
+
+    tight:
+      params: [Robot, Tool, Obj]
+      preconditions: ["can_tight(1)",
+                      "grasped(0,1)",
+                      "requires_tool(2,1)",
+                      "~is_tight(2)"]
+      effect: ["is_tight(2)"]
+
+    turn:
+      params: [Robot, Obj]
+      preconditions: ["is_turnable(1)", 
+                      "grasped(0,1)", 
+                      "~is_tight(1)"]
+      effect: ["is_tight(1)"]
+
+
+  init_state: ["~is_tight(Screw)",
+               "~is_tight(Nail)",
+               "free_hands(Centauro)",
+               "can_tight(Screwdriver)",
+               "can_tight(Hammer)",
+               "is_turnable(Valve)",
+               "requires_tool(Screw,Screwdriver)",
+               "requires_tool(Nail,Hammer)"]
+
+  goal_state: ["is_tight(Screw)",
+               "is_tight(Valve)",
+               "is_tight(Nail)"]

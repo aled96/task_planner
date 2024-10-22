@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 from unified_planning.shortcuts import *
+import rospy
 
 class TaskPlanner:
     def __init__(self):
@@ -13,101 +14,184 @@ class TaskPlanner:
 
     def setTypes(self):
         #Types
-        self.Obj = UserType('Obj')
-        self.Tool = UserType('Tool', father = self.Obj)
-        self.Robot = UserType('Robot')
+        self.types = {} #Map Obj Name - UserType Obj
+
+        type_names_full = rospy.get_param("/task_planner/types/names")
+        
+        for type_name in type_names_full:
+            s = type_name.split("(")
+            
+            if(len(s) == 1):
+                self.types[s[0]] = UserType(s[0])
+            else:
+                self.types[s[0]] = UserType(s[0], father=self.types[s[1][0:-1]])
 
     def setFluents(self):
         #Fluents
-        self.grasped = unified_planning.model.Fluent('grasped', BoolType(), r=self.Robot, o=self.Obj)
-        self.is_tight = unified_planning.model.Fluent('is_tight', BoolType(), o=self.Obj)
-        self.requires_tool = unified_planning.model.Fluent('requires_tool', BoolType(), o=self.Obj, t= self.Tool)
-        self.is_turnable = unified_planning.model.Fluent('is_turnable', BoolType(), o=self.Obj)
-        self.free_hands = unified_planning.model.Fluent('free_hands', BoolType(), r=self.Robot)
-        self.can_tight = unified_planning.model.Fluent('can_tight', BoolType(), o=self.Obj)
+        self.fluents = {}
         
+        fluents_names = rospy.get_param("/task_planner/fluents/names")
+        
+        for fluent_name in fluents_names:
+            fluent_type = rospy.get_param("/task_planner/fluents/"+fluent_name+"/type")
+            params = rospy.get_param("/task_planner/fluents/"+fluent_name+"/params")
+            
+            # Build the keyword arguments dynamically based on the number of parameters
+            kwargs = {f'p{i}': self.types[param] for i, param in enumerate(params)}
+
+            if(fluent_type == "BoolType"):
+                self.fluents[fluent_name] = unified_planning.model.Fluent(fluent_name, BoolType(), **kwargs)
+
     def setActions(self):
-        #Grasp
-        self.grasp = InstantaneousAction('grasp', r=self.Robot, o=self.Obj)
-        r = self.grasp.parameter('r')
-        o = self.grasp.parameter('o')
-
-        self.grasp.add_precondition(self.free_hands(r))
-        self.grasp.add_precondition(Not(self.grasped(r, o)))
-
-        self.grasp.add_effect(self.grasped(r, o), True)
-        self.grasp.add_effect(self.free_hands(r), False)
-
-        #Put Down
-        self.put_down = InstantaneousAction('put_down', r=self.Robot, o=self.Obj)
-        r = self.put_down.parameter('r')
-        o = self.put_down.parameter('o')
-
-        self.put_down.add_precondition(Not(self.free_hands(r)))
-        self.put_down.add_precondition(self.grasped(r, o))
-
-        self.put_down.add_effect(self.grasped(r, o), False)
-        self.put_down.add_effect(self.free_hands(r), True)
-
-
-        #Tight
-        self.tight = InstantaneousAction('tight', r=self.Robot, t=self.Tool, o=self.Obj)
-        r = self.tight.parameter('r')
-        t = self.tight.parameter('t')
-        o = self.tight.parameter('o')
-
-        self.tight.add_precondition(self.can_tight(t))
-        self.tight.add_precondition(self.grasped(r, t))
-        self.tight.add_precondition(self.requires_tool(o, t))
-        self.tight.add_precondition(Not(self.is_tight(o)))
-
-        self.tight.add_effect(self.is_tight(o), True)
-
-        #Turn
-        self.turn = InstantaneousAction('turn', r=self.Robot, o=self.Obj)
-        r = self.turn.parameter('r')
-        o = self.turn.parameter('o')
-
-        self.turn.add_precondition(self.is_turnable(o))
-        self.turn.add_precondition(self.grasped(r, o))
-        self.turn.add_precondition(Not(self.is_tight(o)))
-
-        self.turn.add_effect(self.is_tight(o), True)
+        #Actions
+        self.actions = {}
         
+        actions_names = rospy.get_param("/task_planner/actions/names")
+        
+        for action_name in actions_names:
+            params = rospy.get_param("/task_planner/actions/"+action_name+"/params")
+            preconditions = rospy.get_param("/task_planner/actions/"+action_name+"/preconditions")
+            effect = rospy.get_param("/task_planner/actions/"+action_name+"/effect")
 
+            #Parameters
+            kwargs = {f'p{i}': self.types[param] for i, param in enumerate(params)}
+            
+            self.actions[action_name] = InstantaneousAction(action_name, **kwargs)
+            p = []
+            for i in range(0, len(params)):
+                p.append(self.actions[action_name].parameter('p'+str(i)))
+            
+            #Preconditions
+            for precond in preconditions:
+                #Deal with Not
+                val = True
+                if(precond[0] == '~'):
+                    precond = precond[1:]
+                    val = False
+                
+                #Isolate fluent name 
+                elements = precond.split("(")
+
+                elements[1] = elements[1][:-1] #Remove ")" at the end
+                #Parameters of the fluent
+                params_prec = elements[1].split(",")
+                
+                #Means there was only 1 param
+                if (len(params_prec) == 1):
+                    params_prec = elements[1]
+
+                #Dynamic Parameters
+                args = [p[int(param)] for param in params_prec]
+                
+                if(not val):
+                    self.actions[action_name].add_precondition(Not(self.fluents[elements[0]](*args)))
+                else:
+                    self.actions[action_name].add_precondition(self.fluents[elements[0]](*args))
+        
+            #Effect
+            for eff in effect:
+                #Deal with Not
+                val = True
+                if(eff[0] == '~'):
+                    eff = eff[1:]
+                    val = False
+                
+                #Isolate fluent name 
+                elements = eff.split("(")
+                elements[1] = elements[1][:-1] #Remove ")" at the end
+
+                #Parameters of the fluent
+                params_prec = elements[1].split(",")
+                
+                #Means there was only 1 param
+                if (len(params_prec) == 1):
+                    params_prec = elements[1]
+
+
+                #Dynamic Parameters
+                args = [p[int(param)] for param in params_prec]
+
+                self.actions[action_name].add_effect(self.fluents[elements[0]](*args), val)
+                
     def setProblem(self):
         self.problem = Problem('Problem')
-        self.problem.add_fluent(self.grasped, default_initial_value=False)
-        self.problem.add_fluent(self.is_tight, default_initial_value=False)
-        self.problem.add_fluent(self.free_hands, default_initial_value=False)
-        self.problem.add_fluent(self.can_tight, default_initial_value=False)
-        self.problem.add_fluent(self.is_turnable, default_initial_value=False)
-        self.problem.add_fluent(self.requires_tool, default_initial_value=False)
 
-        self.problem.add_action(self.grasp)
-        self.problem.add_action(self.put_down)
-        self.problem.add_action(self.tight)
-        self.problem.add_action(self.turn)
+        for f in self.fluents:
+            self.problem.add_fluent(self.fluents[f], default_initial_value=False)
+
+        for a in self.actions:
+            self.problem.add_action(self.actions[a])
 
     def addObjects(self):
-        self.Objects = [Object("Centauro", self.Robot),
-                        Object("Screwdriver", self.Tool),
-                        Object("Screw", self.Obj),
-                        Object("Valve", self.Obj)]
+        
+        Objects = []
+        self.Objects_w_names = {}
 
-        self.problem.add_objects(self.Objects)
+        for type in self.types:
+            #For each type, get list of available objects and add them
+            objs = rospy.get_param("/task_planner/objects/"+type)
+
+            for o in objs:
+                Objects.append(Object(o, self.types[type]))
+                self.Objects_w_names[o] = Object(o, self.types[type])
+     
+        self.problem.add_objects(Objects)
 
     def setInitState(self):
-        self.problem.set_initial_value(self.is_tight(self.Objects[2]), False)
-        self.problem.set_initial_value(self.free_hands(self.Objects[0]), True)
-        self.problem.set_initial_value(self.can_tight(self.Objects[1]), True)
-        self.problem.set_initial_value(self.is_turnable(self.Objects[3]), True)
-        self.problem.set_initial_value(self.requires_tool(self.Objects[2], self.Objects[1]), True)
 
+        init_state = rospy.get_param("/task_planner/init_state")
+
+        for s in init_state:
+            #Deal with Not
+            val = True
+            if(s[0] == '~'):
+                s = s[1:]
+                val = False
+            
+            #Isolate fluent name 
+            elements = s.split("(")
+
+            elements[1] = elements[1][:-1] #Remove ")" at the end
+            #Parameters of the fluent
+            params_prec = elements[1].split(",")
+            
+            #Means there was only 1 param
+            if (len(params_prec) == 1):
+                params_prec = [elements[1]]
+
+            #Dynamic Parameters
+            args = [self.Objects_w_names[obj] for obj in params_prec]
+            
+            self.problem.set_initial_value(self.fluents[elements[0]](*args), val)
+            
     def setGoalState(self):
-        self.problem.add_goal(self.is_tight(self.Objects[2]))
-        self.problem.add_goal(self.is_tight(self.Objects[3]))
+        goal_state = rospy.get_param("/task_planner/goal_state")
 
+        for s in goal_state:
+            #Deal with Not
+            val = True
+            if(s[0] == '~'):
+                s = s[1:]
+                val = False
+            
+            #Isolate fluent name 
+            elements = s.split("(")
+
+            elements[1] = elements[1][:-1] #Remove ")" at the end
+            #Parameters of the fluent
+            params_prec = elements[1].split(",")
+            
+            #Means there was only 1 param
+            if (len(params_prec) == 1):
+                params_prec = [elements[1]]
+
+            #Dynamic Parameters
+            args = [self.Objects_w_names[obj] for obj in params_prec]
+            
+            if(not val):
+                self.problem.add_goal(Not(self.fluents[elements[0]](*args)))
+            else:
+                self.problem.add_goal(self.fluents[elements[0]](*args))
 
     def solve(self):
         with OneshotPlanner(problem_kind=self.problem.kind) as planner:
