@@ -25,6 +25,7 @@ class TaskPlanner:
         self.is_turnable = unified_planning.model.Fluent('is_turnable', BoolType(), o=self.Obj)
         self.free_hands = unified_planning.model.Fluent('free_hands', BoolType(), r=self.Robot)
         self.can_tight = unified_planning.model.Fluent('can_tight', BoolType(), o=self.Obj)
+        self.robot_at = unified_planning.model.Fluent('robot_at', BoolType(), r=self.Robot, o=self.Obj)
         
     def setActions(self):
         #Grasp
@@ -32,6 +33,7 @@ class TaskPlanner:
         r = self.grasp.parameter('r')
         o = self.grasp.parameter('o')
 
+        self.grasp.add_precondition(self.robot_at(r, o))
         self.grasp.add_precondition(self.free_hands(r))
         self.grasp.add_precondition(Not(self.grasped(r, o)))
 
@@ -43,6 +45,8 @@ class TaskPlanner:
         r = self.put_down.parameter('r')
         o = self.put_down.parameter('o')
 
+        #Need to better specify where, now it's "go to Object and leave Object", no sense
+        self.put_down.add_precondition(self.robot_at(r, o))
         self.put_down.add_precondition(Not(self.free_hands(r)))
         self.put_down.add_precondition(self.grasped(r, o))
 
@@ -56,6 +60,7 @@ class TaskPlanner:
         t = self.tight.parameter('t')
         o = self.tight.parameter('o')
 
+        self.tight.add_precondition(self.robot_at(r, o))
         self.tight.add_precondition(self.can_tight(t))
         self.tight.add_precondition(self.grasped(r, t))
         self.tight.add_precondition(self.requires_tool(o, t))
@@ -68,11 +73,23 @@ class TaskPlanner:
         r = self.turn.parameter('r')
         o = self.turn.parameter('o')
 
+        self.turn.add_precondition(self.robot_at(r, o))
         self.turn.add_precondition(self.is_turnable(o))
         self.turn.add_precondition(self.grasped(r, o))
         self.turn.add_precondition(Not(self.is_tight(o)))
 
         self.turn.add_effect(self.is_tight(o), True)
+
+        #Move
+        self.move = InstantaneousAction('move', r=self.Robot, start=self.Obj, end=self.Obj)
+        r = self.move.parameter('r')
+        start = self.move.parameter('start')
+        end = self.move.parameter('end')
+
+        self.move.add_precondition(self.robot_at(r, start))
+
+        self.move.add_effect(self.robot_at(r, start), False)
+        self.move.add_effect(self.robot_at(r, end), True)
         
 
     def setProblem(self):
@@ -83,11 +100,13 @@ class TaskPlanner:
         self.problem.add_fluent(self.can_tight, default_initial_value=False)
         self.problem.add_fluent(self.is_turnable, default_initial_value=False)
         self.problem.add_fluent(self.requires_tool, default_initial_value=False)
+        self.problem.add_fluent(self.robot_at, default_initial_value=False)
 
         self.problem.add_action(self.grasp)
         self.problem.add_action(self.put_down)
         self.problem.add_action(self.tight)
         self.problem.add_action(self.turn)
+        self.problem.add_action(self.move)
 
     def addObjects(self):
         self.Objects = [Object("Centauro", self.Robot),
@@ -103,6 +122,7 @@ class TaskPlanner:
         self.problem.set_initial_value(self.can_tight(self.Objects[1]), True)
         self.problem.set_initial_value(self.is_turnable(self.Objects[3]), True)
         self.problem.set_initial_value(self.requires_tool(self.Objects[2], self.Objects[1]), True)
+        self.problem.set_initial_value(self.robot_at(self.Objects[0], self.Objects[2]), True)
 
     def setGoalState(self):
         self.problem.add_goal(self.is_tight(self.Objects[2]))
