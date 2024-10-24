@@ -1,4 +1,4 @@
-# task_planner
+# Task Planner
 Use PDDL to plan for a sequence of actions to execute.
 The implementation allows to create a ROS server that instantiate a PDDL problem and allows to solve it.
 
@@ -8,6 +8,7 @@ Furthermore, functions are available to set initial state and goal state in orde
 
 # Dependencies
 - Unified-Planning (https://unified-planning.readthedocs.io/en/latest/index.html)
+- ROS
 
 # Congifuration File
 The configuration file enables to define all the elements PDDL's problem.

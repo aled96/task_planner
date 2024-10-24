@@ -12,6 +12,9 @@ class TaskPlanner:
         #self.setInitState()
         #self.setGoalState()
 
+    def removeSpaces(self, string):
+        return string.replace(" ", "")
+
     def setTypes(self):
         #Types
         self.types = {} #Map Obj Name - UserType Obj
@@ -19,6 +22,8 @@ class TaskPlanner:
         type_names_full = rospy.get_param("/task_planner/types/names")
         
         for type_name in type_names_full:
+            type_name = self.removeSpaces(type_name)
+            
             s = type_name.split("(")
             
             if(len(s) == 1):
@@ -33,11 +38,15 @@ class TaskPlanner:
         fluents_names = rospy.get_param("/task_planner/fluents/names")
         
         for fluent_name in fluents_names:
+            fluent_name = self.removeSpaces(fluent_name)
+            
             fluent_type = rospy.get_param("/task_planner/fluents/"+fluent_name+"/type")
+            fluent_type = self.removeSpaces(fluent_type)
+            
             params = rospy.get_param("/task_planner/fluents/"+fluent_name+"/params")
             
             # Build the keyword arguments dynamically based on the number of parameters
-            kwargs = {f'p{i}': self.types[param] for i, param in enumerate(params)}
+            kwargs = {f'p{i}': self.types[self.removeSpaces(param)] for i, param in enumerate(params)}
 
             if(fluent_type == "BoolType"):
                 self.fluents[fluent_name] = unified_planning.model.Fluent(fluent_name, BoolType(), **kwargs)
@@ -49,12 +58,14 @@ class TaskPlanner:
         actions_names = rospy.get_param("/task_planner/actions/names")
         
         for action_name in actions_names:
+            action_name = self.removeSpaces(action_name)
+
             params = rospy.get_param("/task_planner/actions/"+action_name+"/params")
             preconditions = rospy.get_param("/task_planner/actions/"+action_name+"/preconditions")
             effect = rospy.get_param("/task_planner/actions/"+action_name+"/effect")
 
             #Parameters
-            kwargs = {f'p{i}': self.types[param] for i, param in enumerate(params)}
+            kwargs = {f'p{i}': self.types[self.removeSpaces(param)] for i, param in enumerate(params)}
             
             self.actions[action_name] = InstantaneousAction(action_name, **kwargs)
             p = []
@@ -63,6 +74,7 @@ class TaskPlanner:
             
             #Preconditions
             for precond in preconditions:
+                precond = self.removeSpaces(precond)
                 #Deal with Not
                 val = True
                 if(precond[0] == '~'):
@@ -90,6 +102,8 @@ class TaskPlanner:
         
             #Effect
             for eff in effect:
+                eff = self.removeSpaces(eff)
+
                 #Deal with Not
                 val = True
                 if(eff[0] == '~'):
@@ -128,6 +142,8 @@ class TaskPlanner:
         self.Objects_w_names = {}
 
         for type in self.types:
+            type = self.removeSpaces(type)
+
             #For each type, get list of available objects and add them
             objs = rospy.get_param("/task_planner/objects/"+type)
 
@@ -146,12 +162,15 @@ class TaskPlanner:
 
         self.ResetInitState()
 
-        if(len(input_state) == 0):
+        if(len(input_state) == 0 or
+           (len(input_state) == 1 and len(input_state[0]) == 0)):
             init_state = rospy.get_param("/task_planner/init_state")
         else:
             init_state = input_state
 
         for s in init_state:
+            s = self.removeSpaces(s)
+
             #Deal with Not
             val = True
             if(s[0] == '~'):
@@ -178,12 +197,15 @@ class TaskPlanner:
         
         self.problem.clear_goals()
 
-        if(len(input_state) == 0):
+        if(len(input_state) == 0 or
+           (len(input_state) == 1 and len(input_state[0]) == 0)):
             goal_state = rospy.get_param("/task_planner/goal_state")
         else:
             goal_state = input_state
 
         for s in goal_state:
+            s = self.removeSpaces(s)
+
             #Deal with Not
             val = True
             if(s[0] == '~'):
