@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 from unified_planning.shortcuts import *
+from unified_planning.io import PDDLWriter
 import rospy
 
 class TaskPlanner:
@@ -11,6 +12,8 @@ class TaskPlanner:
         self.addObjects()
         #self.setInitState()
         #self.setGoalState()
+
+        self.pddl_writer = PDDLWriter(self.problem)
 
     def removeSpaces(self, string):
         return string.replace(" ", "")
@@ -165,6 +168,7 @@ class TaskPlanner:
         if(len(input_state) == 0 or
            (len(input_state) == 1 and len(input_state[0]) == 0)):
             init_state = rospy.get_param("/task_planner/init_state")
+            print("Loading Defulat Init State")
         else:
             init_state = input_state
 
@@ -200,6 +204,7 @@ class TaskPlanner:
         if(len(input_state) == 0 or
            (len(input_state) == 1 and len(input_state[0]) == 0)):
             goal_state = rospy.get_param("/task_planner/goal_state")
+            print("Loading Defulat Goal State")
         else:
             goal_state = input_state
 
@@ -233,6 +238,13 @@ class TaskPlanner:
 
     def solve(self):
         
+        res_string_vec = []
+        
         with OneshotPlanner(problem_kind=self.problem.kind) as planner:
             result = planner.solve(self.problem)
             print("%s returned: %s" % (planner.name, result.plan))
+
+            res_string_vec = self.pddl_writer.get_plan(result.plan).split("\n")
+            res_string_vec = res_string_vec[:-1] # Remove last one that is empty
+
+        return res_string_vec

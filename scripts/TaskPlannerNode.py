@@ -19,11 +19,11 @@ def solve_task_cb(req):
     task_planner_srv.setInitState(req.init_state)
     task_planner_srv.setGoalState(req.goal_state)
 
-    task_planner_srv.solve()
+    pddl_solution = task_planner_srv.solve()
 
-    #TODO: Provide solution and return it
-
-    return SolveTaskResponse([])
+    print(pddl_solution)
+    
+    return SolveTaskResponse(pddl_solution)
 
     
 def main():
